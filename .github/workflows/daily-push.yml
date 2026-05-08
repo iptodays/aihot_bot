@@ -1,0 +1,35 @@
+name: Daily AI Hot Push
+
+on:
+  schedule:
+    # 每天 UTC 1:15 运行（对应中国时间 9:15）
+    - cron: '15 1 * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Create .env file
+        run: |
+          echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" > .env
+          echo "CHAT_ID=${{ secrets.CHAT_ID }}" >> .env
+          echo "SCHEDULED_TIME=09:15" >> .env
+          echo "AIHOT_URL=https://aihot.virxact.com" >> .env
+          echo "PUSH_MODE=daily" >> .env
+      
+      - name: Run push
+        run: node bot.js test
