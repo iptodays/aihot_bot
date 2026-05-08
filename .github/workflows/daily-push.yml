@@ -17,10 +17,22 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package.json') }}
+          restore-keys: ${{ runner.os }}-node-
       
       - name: Install dependencies
         run: npm install
+      
+      - name: Verify configuration
+        run: |
+          echo "CHAT_ID is set: ${{ secrets.CHAT_ID != '' }}"
       
       - name: Create .env file
         run: |
