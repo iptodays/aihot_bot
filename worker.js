@@ -1,4 +1,4 @@
-// Cloudflare Workers 版本的 AIHOT Bot
+// Cloudflare Workers 版本的 AIHOT Bot（支持定时推送 + 交互查询）
 const AIHOT_API_BASE = 'https://aihot.virxact.com';
 
 // 全局状态，每个请求会重新初始化
@@ -16,13 +16,19 @@ const modeNames = {
   'all': '📚 全部'
 };
 
+// 处理 HTTP 请求（用户交互）
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request));
 });
 
+// 处理定时触发器（自动推送）
+addEventListener('scheduled', event => {
+  event.waitFor(handleScheduledPush());
+});
+
 async function handleRequest(request) {
   if (request.method !== 'POST') {
-    return new Response('AIHOT Bot is running!', { status: 200 });
+    return new Response('🤖 AIHOT Bot is running! 定时推送功能已启用。', { status: 200 });
   }
 
   try {
@@ -32,6 +38,28 @@ async function handleRequest(request) {
   } catch (error) {
     console.error('Error:', error);
     return new Response('Error', { status: 500 });
+  }
+}
+
+async function handleScheduledPush() {
+  console.log('⏰ 触发定时推送任务...');
+  
+  if (!TELEGRAM_BOT_TOKEN || !TARGET_CHAT_ID) {
+    console.error('❌ 缺少必要环境变量：TELEGRAM_BOT_TOKEN 或 TARGET_CHAT_ID');
+    return;
+  }
+
+  try {
+    const dailyData = await fetchDaily();
+    if (dailyData) {
+      const message = formatDailyMessage(dailyData);
+      await sendMessage(TARGET_CHAT_ID, message);
+      console.log('✅ 定时推送成功');
+    } else {
+      console.error('❌ 获取日报失败');
+    }
+  } catch (error) {
+    console.error('❌ 定时推送失败:', error);
   }
 }
 
@@ -134,11 +162,16 @@ async function sendMessage(chatId, text, replyMarkup = null) {
     body.reply_markup = replyMarkup;
   }
   
-  await fetch(url, {
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Telegram API error: ${error.description}`);
+  }
 }
 
 async function editMessageText(chatId, messageId, text, replyMarkup = null) {
@@ -291,6 +324,9 @@ async function sendHelpMessage(chatId) {
 📰 行业动态 - 行业资讯
 📄 论文研究 - 最新论文
 💡 技巧观点 - 使用技巧
+
+⏰ 自动推送：
+每天北京时间 09:15 自动推送当日AI日报到频道
 
 💡 小贴士：
 - 日报每天北京时间 08:00 自动更新

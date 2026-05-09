@@ -9,6 +9,7 @@ on:
 jobs:
   push:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     
     steps:
       - name: Checkout code
@@ -18,29 +19,40 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
       
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('package.json') }}
-          restore-keys: ${{ runner.os }}-node-
+      - name: Print debug info
+        run: |
+          echo "Current UTC time: $(date -u)"
+          echo "Current Beijing time: $(TZ='Asia/Shanghai' date)"
+          echo "Node version: $(node -v)"
+          echo "NPM version: $(npm -v)"
       
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
       
-      - name: Verify configuration
+      - name: Verify secrets
         run: |
+          echo "BOT_TOKEN is set: ${{ secrets.BOT_TOKEN != '' }}"
           echo "CHAT_ID is set: ${{ secrets.CHAT_ID != '' }}"
+          if [ -z "${{ secrets.BOT_TOKEN }}" ]; then echo "❌ BOT_TOKEN is missing!"; exit 1; fi
+          if [ -z "${{ secrets.CHAT_ID }}" ]; then echo "❌ CHAT_ID is missing!"; exit 1; fi
       
       - name: Create .env file
         run: |
-          echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" > .env
-          echo "CHAT_ID=${{ secrets.CHAT_ID }}" >> .env
-          echo "SCHEDULED_TIME=09:15" >> .env
-          echo "AIHOT_URL=https://aihot.virxact.com" >> .env
-          echo "PUSH_MODE=daily" >> .env
+          cat > .env << EOF
+          BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+          CHAT_ID=${{ secrets.CHAT_ID }}
+          SCHEDULED_TIME=09:15
+          AIHOT_URL=https://aihot.virxact.com
+          PUSH_MODE=daily
+          EOF
+          
+          echo "✅ .env file created successfully"
       
-      - name: Run push
-        run: node bot.js test
+      - name: Run push with retry
+        uses: nick-fields/retry@v2
+        with:
+          max_attempts: 3
+          retry_on: error
+          timeout_seconds: 30
+          command: node bot.js test
